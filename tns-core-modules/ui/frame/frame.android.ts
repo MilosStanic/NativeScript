@@ -14,9 +14,11 @@ import {
 
 import {
     _setAndroidFragmentTransitions, _onFragmentCreateAnimator, _getAnimatedEntries,
-    _updateTransitions, _reverseTransitions, _clearEntry, _clearFragment, AnimationType
+    _updateTransitions, _reverseTransitions, _clearEntry, _clearFragment, AnimationType,
+    setupDefaultAnimations
 } from "./fragment.transitions";
 
+import { FadeTransition } from "../transition/fade-transition";
 import { profile } from "../../profiling";
 
 // TODO: Remove this and get it from global to decouple builder for angular
@@ -328,6 +330,44 @@ export class Frame extends FrameBase {
         }
 
         return false;
+    }
+
+    public _onLivesync(context?: ModuleContext): boolean {
+        if (!this._currentEntry || !this._currentEntry.entry) {
+            return false;
+        }
+
+        if (context && context.type && context.path) {
+            const viewFromEntry = <Page>createViewFromEntry({ moduleName: context.path.substr(2, context.path.length - 6) });
+            const backstackEntry = {
+                entry: this._currentEntry.entry, // new?
+                resolvedPage: viewFromEntry,
+                navDepth: undefined,
+                fragmentTag: undefined,
+                frameId: undefined
+            }
+
+            setupDefaultAnimations(backstackEntry, new FadeTransition(150, null));
+
+            // Are these required?
+            const frameId = this._android.frameId;
+            this._isBack = false;
+            backstackEntry.frameId = frameId;
+
+            // Log
+            console.log("---> frameId", frameId);
+
+            const fragmentManager = this._getFragmentManager();
+            const newFragmentTag = `fragment${fragmentId}[${navDepth}]`;
+            const newFragment = this.createFragment(backstackEntry, newFragmentTag);
+
+            const transaction = fragmentManager.beginTransaction()
+            transaction.replace(this.containerViewId, newFragment, newFragmentTag);
+            transaction.commitAllowingStateLoss();
+        }
+
+        // TODO(vchimev): Should execute a navigation if fragment replacement failed?
+        return true;
     }
 
     @profile
